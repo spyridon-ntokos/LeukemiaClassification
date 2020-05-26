@@ -1,0 +1,775 @@
+---
+title: "HarvardX: PH125.9x Data Science  \n   Leukemia Classification  \n CYO Project"
+author: "Spyridon Ntokos"
+date: "May 26, 2020"
+output: 
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+---
+
+\pagebreak
+
+# Overview
+
+This project is related to the CYO (Choose Your Own) Project of the HarvardX: PH125.9x Data Science: Capstone course. The objective of this project is to build a classification model of a leukemia patients' gene expression dataset to be evaluated by measuring accuracy.
+
+## Introduction
+
+Cancer is one of the leading causes of deaths today. Being able to correctly classify it, leads to the appropriate selection of therapeutic approaches and the most efficient treatment. 
+
+This Gene Expression Dataset (Golub et al.) contains data on 72 patients suffering from either Acute Myeloid Leukemia (AML) or Acute Lymphoblastic Leykemia (ALL). Thus, through the help of sufficient data analysis and machine learning techniques, an attempt to accurately classify the patients between the two cancer types is made.
+
+## Aim of the project
+
+The aim of this project is to develop a machine learning algorithm using the inputs in training subset (~52% of the patients' data) to predict cancer type in the independent (validation) subset (the remaining ~47% of them). Several machine learning algorithms have been used and results have been compared to get maximum possible accuracy in prediction.
+
+This report contains problem definition, data ingestion, data preparation / cleansing, exploratory analysis, modeling and data analysis and results. Finally the report ends with some concluding remarks.
+
+## Problem definition
+
+This capstone project on "Leukemia Classification" predicts the cancer type of a leukemia patient based on their gene expression values. The dataset used for this purpose can be found in the following link:
+
+* [Gene expression dataset (Golub et al.)] https://www.kaggle.com/crawford/gene-expression/data
+* [Gene expression dataset (Golub et al.) - zip file]
+https://storage.googleapis.com/kaggle-data-sets/1868/3249/bundle/archive.zip?GoogleAccessId=web-data@kaggle-161607.iam.gserviceaccount.com&Expires=1590574751&Signature=pNKbnTCWdotyK7OrAVw%2FRlxbTyU2%2BbtseYhX3yd0ahsPrCubhMpDU1U5GtHevYPq%2FaO0jTZzQ0dcXTBOYtR%2BrnUrM3Gcg3N%2FIrWJvw8EP%2FThEllTskhx6MsmeynQ%2BR8cyt6vWWR9S6%2Fm73OBLs7E1xBo6wpurikEP%2Fq%2FHx9Q5ugdIMtPO57Kw6N4pkzDBWMyPmKBlOXj3vtRTyvHgORFYdcdhhFcGcRq06CjEImO%2FbPn1jt2C%2BB5ksmnV2ICcbTIQ9kCn6ayiY%2B3Eai1tCyLTasS18E2diMEZ95qnY5vQxw5lDXJwq3G%2F4HQ1o90%2FDmtngJ9YI1hidl%2Fk3Xb%2BiyWYg%3D%3D&response-content-disposition=attachment%3B+filename%3Dgene-expression.zip
+
+
+The challenge is not so easy given that there are thousands of genes under evaluation of their expression level present in the dataset, while the number of patients in the training dataset is really low to make trustworthy accurate predictions.
+
+The main idea is to develop an ensemble algorithm based on several different kinds of machine learning algorithms to most effectively predict patients' cancer type in the validation subset according to gene expression values of patients in the training subset.
+
+\pagebreak
+
+# Preparation Stage
+
+## Data ingestion
+
+Data is downloaded from kaggle's website, using the appropriate URL. The three contained files also stored locally, while they are loaded for the required analysis. Required libraries for upcoming analysis are loaded, unless they are not yet installed.
+
+```{r Data ingestion, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+###############################################
+# Create train & validation (indepedent) sets #
+###############################################
+
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret", repos = "http://cran.us.r-project.org")
+if(!require(ggplot2)) install.packages("ggplot2", repos = "http://cran.us.r-project.org")
+if(!require(naniar)) install.packages("naniar", repos = "http://cran.us.r-project.org")
+if(!require(matrixStats)) install.packages("matrixStats", repos = "http://cran.us.r-project.org")
+if(!require(gridExtra)) install.packages("gridExtra", repos = "http://cran.us.r-project.org")
+
+
+# Gene expression dataset (Golub et al.):
+# https://www.kaggle.com/crawford/gene-expression/data
+
+dl <- tempfile()
+download.file("https://storage.googleapis.com/kaggle-data-sets/1868/3249/bundle/archive.zip?GoogleAccessId=web-data@kaggle-161607.iam.gserviceaccount.com&Expires=1590574751&Signature=pNKbnTCWdotyK7OrAVw%2FRlxbTyU2%2BbtseYhX3yd0ahsPrCubhMpDU1U5GtHevYPq%2FaO0jTZzQ0dcXTBOYtR%2BrnUrM3Gcg3N%2FIrWJvw8EP%2FThEllTskhx6MsmeynQ%2BR8cyt6vWWR9S6%2Fm73OBLs7E1xBo6wpurikEP%2Fq%2FHx9Q5ugdIMtPO57Kw6N4pkzDBWMyPmKBlOXj3vtRTyvHgORFYdcdhhFcGcRq06CjEImO%2FbPn1jt2C%2BB5ksmnV2ICcbTIQ9kCn6ayiY%2B3Eai1tCyLTasS18E2diMEZ95qnY5vQxw5lDXJwq3G%2F4HQ1o90%2FDmtngJ9YI1hidl%2Fk3Xb%2BiyWYg%3D%3D&response-content-disposition=attachment%3B+filename%3Dgene-expression.zip", 
+              dl)
+
+# Extract .csv files
+actual <- read.csv(unzip(dl, "actual.csv"), stringsAsFactors = FALSE)
+train_set <- read.csv(unzip(dl, "data_set_ALL_AML_train.csv"), stringsAsFactors = FALSE)
+validation <- read.csv(unzip(dl, "data_set_ALL_AML_independent.csv"), stringsAsFactors = FALSE)
+
+rm(dl)
+```
+
+*Note: Anything no longer used will be considered unnecessary and manually removed (keep workspace clean & tidy).*
+
+## Data understanding
+
+To understand the data, we need to take a glimpse of it and determine its dimensions. 
+
+**Actual dataset:**
+```{r Data understanding actual, echo = FALSE}
+head(actual)
+dim(as.matrix(actual))
+```
+This set contains the data for all 72 patients and their cancer type.
+
+**Training subset:**
+```{r Data understanding train, echo = FALSE}
+head(train_set[, 1:15]) %>% as.tibble()
+dim(as.matrix(train_set))
+```
+Every row in the set represents a gene, where all *X* columns represent the expression value for every patient and *call* columns give more information about the expression level.
+
+**Validation subset:**
+```{r Data understanding validation, echo = FALSE}
+head(validation[, 1:15]) %>% as.tibble()
+dim(as.matrix(validation))
+```
+Similar to training set, with the main difference in the observed genes number.
+
+## Reshaping the data
+
+Proceeding with data preparation / cleansing:
+
+* **Actual dataset:**
+
+The actual dataset is to be divided into two parts, each holding the data of patients in the training and validation subsets, respectively.
+
+```{r Reshape actual, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+actual_train <- actual[1:38, ]
+actual_validation <- actual[39:72, ]
+```
+
+* **Training dataset:** 
+
+```{r Train copy, echo = FALSE, eval = TRUE}
+original_train <- train_set
+```
+
+
+Both training and validation sets contain *call* columns, which have 3 possible values: Present (P), Absent (A), and Marginal (M). This article (found at: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1409797/) sums it up nicely by mentioning that the DNA microarray manufacturer Affymetrix (now a subsidiary of Thermo Fisher Scientific): 
+
+"[...] uses a non-parametric statistical test (Wilcoxon signed rank test) of whether significantly more perfect matches show more hybridization signal than their corresponding mismatches to produce the detection call (Absent (A), Present (P) or Marginal (M))[...]".
+
+However, the values don't provide any additional information in this data analysis, so we are dropping them:
+
+```{r Train drop call, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+call_columns <- grep(pattern = "call", x = names(train_set))
+train_set <- train_set[,-call_columns]
+```
+
+Next, the dataset is to be reshaped so that every row corresponds to patients' data, rather than to every observed gene:
+
+```{r Train reshape, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+# Store 'Gene Access Name' column as new column headers
+gene_id <- as.vector(t(train_set[,2]))
+
+# Keep only numeric data
+train_set <- train_set[, - c(1,2)]
+
+# Transpose table and name new columns according to 'gene_id'
+# and rows according to patient ID
+train_set <- as.data.frame(t(train_set))
+colnames(train_set) <- gene_id
+train_set <- cbind(patient = row.names(train_set),
+                   cancer_type = actual_train$cancer,
+                   train_set)
+```
+
+As the patient IDs in the training set are preceded by an 'X', simply clear it, in order to match with the *patient* column in the respective actual set:
+
+```{r Train drop X, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+train_set <- train_set %>%
+  separate(patient, c(NA, "patient"), sep = "X")
+```
+
+Any missing values must be reported:
+
+```{r Train report NAs, echo = TRUE, error = TRUE}
+anyNA(train_set)
+try(gg_miss_upset(train_set))
+```
+
+Spot the missing values in reported column and identify the reason:
+
+```{r Train spot NAs, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+train_set[, 'Var.1650']
+gene_id[1649]
+```
+
+As seen above, the whole last column is comprised of NAs and doesn't correspond to any gene, thus its removal is necessary:
+
+```{r Train remove NAs, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+train_set <- train_set[, - c(1650)]
+vis_miss(train_set) +
+  theme(axis.text.x = element_blank()) +
+  ggtitle("Missing data in train set?")
+```
+
+As observed in the previous plot, no NAs are included in the dataset anymore, so we sum up our data cleansing by confirming our changes:
+
+```{r Train clean confirm, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+head(train_set[, 1:15]) %>% as_tibble()
+```
+
+* **Validation dataset:** 
+
+Firstly, previously was mentioned the fact that the validation set is observing more genes than the training dataset, so it must be made sure that the two datasets' observed genes match:
+
+```{r Validation match genes, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+validation <- validation %>% 
+  semi_join(original_train, by = "Gene.Accession.Number")
+```
+
+Afterwards, the same procedure is followed as in training set's case:
+
+```{r Validation reshape, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+# Removing irrelevant 'call' columns
+call_columns <- grep(pattern = "call", x = names(validation))
+validation <- validation[,-call_columns]
+
+# Store 'Gene Access Name' column as new column headers
+gene_id <- as.vector(t(validation[,2]))
+
+# Keep only numeric data
+validation <- validation[, - c(1,2)]
+
+# Transpose table and name new columns according to 'gene_id'
+# and rows according to patient ID
+validation <- as.data.frame(t(validation))
+colnames(validation) <- gene_id
+validation <- cbind(patient = row.names(validation), 
+                    cancer_type = actual_validation$cancer,
+                    validation)
+
+# Drop 'X' from patient IDs
+validation <- validation %>%
+  separate(patient, c(NA, "patient"), sep = "X")
+```
+
+Once again, check for missing values:
+```{r Validation NAs, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+vis_miss(validation) +
+  theme(axis.text.x = element_blank()) +
+  ggtitle("Missing data in validation set?")
+```
+
+Proceed by confirming applied changes:
+```{r Validation clean confirm, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+head(validation[, 1:15]) %>% as_tibble()
+```
+
+```{r Tidy workspace, echo = FALSE}
+# Tidy workspace, remove anything unnecessary
+rm(gene_id, call_columns, original_train)
+```
+
+\pagebreak
+
+# Exploratory Data Analysis
+
+## Principal Component Analysis (PCA)
+
+PCA analysis is used to categorize data into different clusters based on their similarities. In our case though, it is not really needed as the categories / clusters are already known (AML or ALL) but after a short PCA analysis, the most important principal components will be determined and patients will be visually clustered according to them.
+
+```{r PCA intro, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+# Matrix transformation
+x <- as.matrix(train_set[, - c(1,2)])
+x_centered <- sweep(x, 2, colMeans(x), FUN = "-")
+x_scaled <- sweep(x_centered, 2, colSds(x), FUN = "/")
+
+# Proportion of variance
+pca <- prcomp(x_scaled)
+summary(pca)
+
+var_explained <- cumsum(pca$sdev^2/sum(pca$sdev^2))
+plot(var_explained)
+```
+
+According to the plot above, one can see that almost 95% of the variance is explained by the first 30 columns.
+
+Next, try to figure out which PCs' difference is so great that they can be used to cluster our patients (visually the boxplots in these PCs won't overlap each other):
+
+```{r Non-overlapping PCs, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+data.frame(type = actual_train$cancer, pca$x) %>%
+  gather(key = "PC", value = "value", -type) %>%
+  ggplot(aes(PC, value, fill = type)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+The detected non-overlapping PCs are PC1 and PC3:
+
+```{r PC1 vs PC3, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+data.frame(pca$x[,c(1,3)], type = actual_train$cancer) %>%
+  ggplot(aes(PC1, PC3, color = type)) +
+  geom_point()
+```
+
+The above plot explains that AML patients tend to have negative values for both PC1 and PC3, where the exact opposite holds for the ALL patients.
+
+```{r PCA tidy workspace, echo = FALSE}
+rm(var_explained, x, x_centered, x_scaled, pca)
+```
+
+## Data visualization
+
+Due to the high amount of observed genes in the dataset, we 'll focus on just a few of them.
+
+### Top 10 genes expressed by leukemia type
+
+```{r Top 10 genes expressed, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+train_set %>%
+  select(-patient) %>%
+  group_by(cancer_type) %>%
+  summarise_all(list(mean)) %>%
+  gather("gene", "mean", - cancer_type) %>%
+  group_by(cancer_type) %>%
+  top_n(10) %>%
+  ggplot(aes(gene, fill = mean)) +
+  geom_bar() +
+  facet_wrap(~cancer_type) +
+  coord_flip() +
+  ggtitle("Top 10 Genes Expressed in AML and ALL patients") +
+  labs(x = "Gene Accession Number",
+       caption = "Based on mean expression value per leukemia type") +
+  scale_fill_continuous("Mean expression", low = "steelblue3", high = "indianred4") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank())
+```
+
+These are the top 10 most expressed genes based on their average expression value as seen in ALL and AML patients in the training dataset.
+
+### Top 10 highest gene expressions
+
+```{r Top 10 highest gene expressions, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+# ...in ALL patients
+all_top_genes <- train_set %>%
+  filter(cancer_type == "ALL") %>%
+  gather("gene", "value", - c(patient, cancer_type)) %>% 
+  top_n(10, value) %>%
+  ggplot(aes(patient, value)) +
+  geom_point(aes(col = gene)) +
+  xlab("ALL-patient") +
+  ylab("Max. expressed value") +
+  scale_color_brewer("Gene Accession Numner", palette = "Dark2") +
+  ggtitle("Top 10 highest gene expressions")
+  
+# ...in AML patients
+aml_top_genes <- train_set %>%
+  filter(cancer_type == "AML") %>%
+  gather("gene", "value", - c(patient, cancer_type)) %>% 
+  top_n(10, value) %>%
+  ggplot(aes(patient, value)) +
+  geom_point(aes(col = gene)) +
+  xlab("AML-patient") +
+  ylab("Max. expressed value") +
+  scale_color_brewer("Gene Accession Numner", palette = "Dark2")
+
+grid.arrange(all_top_genes, aml_top_genes, ncol = 1)
+```
+
+From the plot above, it is clearly seen that in both cancer types many genes are mutually expressed in high levels, but there are genes that are expressed higher only in ALL patients, such as the gene with "AFFX-HSAC07/X00351_5_at" accession number in patients 6 and 23, and others that are expressed higher only in AML patients, such as the gene with "AFFX-HUMGAPDH/M33197_5_at" in patient 36.
+
+```{r Visualizations tidy workspace, echo = FALSE}
+rm(all_top_genes, aml_top_genes)
+```
+
+\pagebreak
+
+# Model Training
+
+## Model preparation
+
+Different kinds of machine learning algorithms are going to be implemented, measured and compared, in order to pick the most efficient ones for the construction of an esemble algorithm.
+
+**Loading needed libraries:**
+```{r Model libraries, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+if(!require(naivebayes)) install.packages("naivebayes")
+if(!require(kernlab)) install.packages("kernlab")
+if(!require(RSNNS)) install.packages("RSNNS")
+if(!require(deepnet)) install.packages("deepnet")
+if(!require(caTools)) install.packages("caTools")
+if(!require(gbm)) install.packages("gbm")
+if(!require(C50)) install.packages("C50")
+if(!require(plyr)) install.packages("plyr")
+```
+
+*Note: some libraries will mask some needed functions from libraries already loaded, such as dplyr's and caret's functions. Following code specifies which masked functions are used.*
+
+**Model preparation:**
+
+The training set will be used for the model creation, where the validation set will be used to accurately measure the final model's efficiency. Thus the training set is to be partitioned into two subsets: 
+
+* train subset: comprising of 85% of original training dataset's entries
+* test subset: comprising of the remaining 15%
+
+```{r Model subsets, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+train_canc <- train_set[, !(colnames(train_set) == "patient")]
+
+set.seed(1998, sample.kind = "Rounding")
+test_index <- createDataPartition(train_canc$cancer_type,
+                                  p = 0.15, list = FALSE)
+test_canc <- train_canc[test_index, ] %>%
+  mutate(cancer_type = as.factor(cancer_type))
+train_canc <- train_canc[-test_index, ] %>%
+  mutate(cancer_type = as.factor(cancer_type))
+```
+
+*Note 1: the subsets had their "patient" columns dropped for easiness in model training*
+*Note 2: a seed was set for the recreation of the code*
+
+```{r Model subsets tidy workspace, echo = FALSE}
+rm(test_index)
+```
+
+**Setup metric and control:**
+
+Metric used for the tuning parameter's selection will be the accuracy and control is chosen as 10-fold cross-validation with 3 separate repeats:
+
+```{r Setup metric and control, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+control <- trainControl(method = "repeatedcv", 
+                        number = 10, repeats = 3)
+metric <- "Accuracy"
+```
+
+## Model setup
+
+### Naive Bayes
+```{r Naive Bayes, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+set.seed(1998, sample.kind = "Rounding")
+
+fit.naiveBayes <-caret::train(cancer_type ~ .,
+                              data = train_canc,
+                              method = "naive_bayes",
+                              trControl = control,
+                              metric = metric)
+
+preds.naiveBayes <- predict(fit.naiveBayes, test_canc)
+
+caret::confusionMatrix(preds.naiveBayes, test_canc$cancer_type)$overall
+```
+
+### k-Nearest Neighbors
+
+```{r knn, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+set.seed(1998, sample.kind = "Rounding")
+
+fit.knn <- caret::train(cancer_type ~ .,
+                        data = train_canc,
+                        method = "knn",
+                        trControl = control,
+                        metric = metric,
+                        tuneGrid = data.frame(k = seq(5, 31, 2)))
+
+fit.knn$bestTune
+
+preds.knn <- predict(fit.knn, test_canc)
+
+caret::confusionMatrix(preds.knn, test_canc$cancer_type)$overall
+
+```
+
+### Support Vector Machines
+
+```{r SVM, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+set.seed(1998, sample.kind = "Rounding")
+
+fit.svm <- caret::train(cancer_type ~ .,
+                        data = train_canc,
+                        method = "svmRadial",
+                        trControl = control,
+                        metric = metric)
+
+preds.svm <- predict(fit.svm, test_canc)
+
+caret::confusionMatrix(preds.svm, test_canc$cancer_type)$overall
+
+```
+
+### Multilayer Perceptrons
+
+```{r MLP, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+set.seed(1998, sample.kind = "Rounding")
+
+fit.mlp <- caret::train(cancer_type ~ .,
+                        data = train_canc,
+                        method = "mlp",
+                        trControl = control,
+                        metric = metric)
+
+preds.mlp <- predict(fit.mlp, test_canc)
+
+caret::confusionMatrix(preds.mlp, test_canc$cancer_type)$overall
+
+```
+
+### Deep Neural Network
+
+```{r DNN, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+set.seed(1998, sample.kind = "Rounding")
+
+fit.dnn <- caret::train(cancer_type ~ .,
+                        data = train_canc,
+                        method = "dnn",
+                        trControl = control,
+                        metric = metric)
+
+preds.dnn <- predict(fit.dnn, test_canc)
+
+caret::confusionMatrix(preds.dnn, test_canc$cancer_type)$overall
+
+```
+
+### Generalized Linear Model
+
+```{r GLM, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+set.seed(1998, sample.kind = "Rounding")
+
+fit.glm <- caret::train(cancer_type ~ .,
+                        data = train_canc,
+                        method = "glm",
+                        trControl = control,
+                        metric = metric)
+
+preds.glm <- predict(fit.glm, test_canc)
+
+caret::confusionMatrix(preds.glm, test_canc$cancer_type)$overall
+
+```
+
+### Boosted Logistic Regression
+
+```{r LogitBoost, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+set.seed(1998, sample.kind = "Rounding")
+
+fit.lb <- caret::train(cancer_type ~ .,
+                       data = train_canc,
+                       method = "LogitBoost",
+                       trControl = control,
+                       metric = metric)
+
+preds.lb <- predict(fit.lb, test_canc)
+
+caret::confusionMatrix(preds.lb, test_canc$cancer_type)$overall
+
+```
+
+### Stochastic Gradient Boosting
+
+```{r GBM, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+set.seed(1998, sample.kind = "Rounding")
+
+gbm_grid <- expand.grid(
+  n.trees = 5,
+  interaction.depth = 3,
+  shrinkage = 0.03,
+  n.minobsinnode = 2)
+
+fit.gbm <- caret::train(cancer_type ~ .,
+                        data = train_canc,
+                        method = "gbm",
+                        trControl = control,
+                        metric = metric,
+                        tuneGrid = gbm_grid,
+                        verbose = FALSE)
+
+preds.gbm <- predict(fit.gbm, test_canc)
+
+caret::confusionMatrix(preds.gbm, test_canc$cancer_type)$overall
+
+```
+
+### C5.0 (Decision Tree algorithm)
+
+```{r C5.0, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+set.seed(1998, sample.kind = "Rounding")
+
+fit.c5 <- caret::train(cancer_type ~ .,
+                       data = train_canc,
+                       method = "C5.0",
+                       trControl = control,
+                       metric = metric,
+                       verbose = FALSE)
+
+preds.c5 <- predict(fit.c5, test_canc)
+
+caret::confusionMatrix(preds.c5, test_canc$cancer_type)$overall
+
+plot(fit.c5, main = "Decision Tree")
+
+```
+
+### Random Forest
+
+```{r RF, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+set.seed(1998, sample.kind = "Rounding")
+
+fit.rf <- caret::train(cancer_type ~ .,
+                       data = train_canc,
+                       method = "rf",
+                       trControl = control,
+                       metric = metric,
+                       verbose = FALSE)
+
+preds.rf <- predict(fit.rf, test_canc)
+
+caret::confusionMatrix(preds.rf, test_canc$cancer_type)$overall
+
+plot(fit.rf$finalModel, main = "Random Forest")
+
+```
+
+### K-means Clustering
+
+```{r K-means Clustering, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+predict_kmeans <- function(x, k) {
+  centers <- k$centers    # extract cluster centers
+  
+  # calculate distance to cluster centers
+  distances <- sapply(1:nrow(x), function(i){
+    apply(centers, 1, function(y) dist(rbind(x[i,], y)))
+  })
+  max.col(-t(distances))  # select cluster with min distance to center
+}
+
+train_canc_m <- as.matrix(train_canc[, -1])
+test_canc_m <- as.matrix(test_canc[, -1])
+
+set.seed(1998, sample.kind = "Rounding")
+k <- kmeans(train_canc_m, centers = 2)
+kmeans_preds <- ifelse(predict_kmeans(test_canc_m, k) == 1, "ALL", "AML")
+
+caret::confusionMatrix(as.factor(kmeans_preds), as.factor(test_canc$cancer_type))$overall
+
+```
+
+This algorithm is immediately rejected due its low accuracy (<50%).
+
+```{r K-means tidy workspace, echo = FALSE}
+rm(train_canc_m, test_canc_m, 
+   k, kmeans_preds, predict_kmeans)
+```
+
+### Model results
+
+```{r Model results, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+results <- resamples(list(naiveBayes = fit.naiveBayes,
+                          knn = fit.knn,
+                          svm = fit.svm,
+                          mlp = fit.mlp,
+                          dnn = fit.dnn,
+                          glm = fit.glm,
+                          logitBoost = fit.lb,
+                          gbm = fit.gbm,
+                          C5.0 = fit.c5,
+                          randomForest = fit.rf))
+
+dotplot(results, main = "Model Accuracy Results")
+
+```
+
+It is obvious that first 5 algorithms perform extremely well considering their accuracies, and their Kappa measurements. Nevertheless, the least efficient algorithms that will not be included in the ensemble algorithm will be the last three. They are excluded due to the fact that their Kappa measurements is equal to zero (gbm, dnn) or it can take negative values (glm).
+
+As Dr. Stelios Kampakis describes: "[...] Cohen’s kappa is always less than or equal to 1. Values of 0 or less, indicate that the classifier is useless. There is no standardized way to interpret its values. Landis and Koch (1977) provide a way to characterize values. According to their scheme a value < 0 is indicating no agreement , 0–0.20 as slight, 0.21–0.40 as fair, 0.41–0.60 as moderate, 0.61–0.80 as substantial, and 0.81–1 as almost perfect agreement. [...]".
+
+```{r Model results tidy workspace, echo = FALSE}
+rm(fit.gbm, fit.dnn, fit.glm,
+   preds.gbm, preds.dnn, preds.glm,
+   gbm_grid, control, metric)
+```
+
+### Ensemble
+
+```{r Ensemble, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+ensemble <- cbind(knn = preds.knn == "ALL",
+                  naiveBayes = preds.naiveBayes == "ALL",
+                  randomForest = preds.rf == "ALL",
+                  logitBoost = preds.lb == "ALL",
+                  C5.0 = preds.c5 == "ALL",
+                  svm = preds.svm == "ALL",
+                  mlp = preds.mlp == "ALL")
+
+preds.ensemble <- ifelse(rowMeans(ensemble) > 0.5, "ALL", "AML")
+
+caret::confusionMatrix(as.factor(preds.ensemble), 
+                       test_canc$cancer_type)$overall
+```
+
+Our final model seems to work extremely well over the test subset of the original dataset. Now, it is ready to be tested over the validation set.
+
+```{r Ensemble tidy workspace, echo = FALSE}
+rm(train_canc, test_canc)
+```
+
+### Final model
+
+Every training model included in the ensemble algorithm has to predict the validation's patients' cancer type:
+
+```{r Final model preds, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+preds.knn <- predict(fit.knn, validation)
+results <- data.frame(Method = "k-Nearest Neighbors",
+                      Accuracy = caret::confusionMatrix(preds.knn, validation$cancer_type)$overall["Accuracy"])
+
+preds.naiveBayes <- predict(fit.naiveBayes, validation)
+results <- dplyr::bind_rows(results,
+                            data.frame(Method = "Naive Bayes",
+                                       Accuracy = caret::confusionMatrix(preds.naiveBayes, validation$cancer_type)$overall["Accuracy"]))
+
+preds.rf <- predict(fit.rf, validation)
+results <- dplyr::bind_rows(results,
+                            data.frame(Method = "Random Forest",
+                                       Accuracy = caret::confusionMatrix(preds.rf, validation$cancer_type)$overall["Accuracy"]))
+
+preds.lb <- predict(fit.lb, validation)
+results <- dplyr::bind_rows(results,
+                            data.frame(Method = "Boosted Logistic Regression",
+                                       Accuracy = caret::confusionMatrix(preds.lb, validation$cancer_type)$overall["Accuracy"]))
+
+preds.c5 <- predict(fit.c5, validation)
+results <- dplyr::bind_rows(results,
+                            data.frame(Method = "C5.0 (Decision Tree Algorithm)",
+                                       Accuracy = caret::confusionMatrix(preds.c5, validation$cancer_type)$overall["Accuracy"]))
+
+preds.svm <- predict(fit.svm, validation)
+results <- dplyr::bind_rows(results,
+                            data.frame(Method = "Support Vector Machines",
+                                       Accuracy = caret::confusionMatrix(preds.svm, validation$cancer_type)$overall["Accuracy"]))
+
+preds.mlp <- predict(fit.mlp, validation)
+results <- dplyr::bind_rows(results,
+                            data.frame(Method = "Multilayer Perceptons",
+                                       Accuracy = caret::confusionMatrix(preds.mlp, validation$cancer_type)$overall["Accuracy"]))
+
+```
+
+The results table was overwritten to hold the new predicted accuracy per method used.
+
+```{r Final model ensemble, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+ensemble <- cbind(knn = preds.knn == "ALL",
+                  naiveBayes = preds.naiveBayes == "ALL",
+                  randomForest = preds.rf == "ALL",
+                  logitBoost = preds.lb == "ALL",
+                  C5.0 = preds.c5 == "ALL",
+                  svm = preds.svm == "ALL",
+                  mlp = preds.mlp == "ALL")
+
+preds.ensemble <- ifelse(rowMeans(ensemble) > 0.5, "ALL", "AML")
+
+results <- dplyr::bind_rows(results,
+                            data.frame(Method = "Ensemble",
+                                       Accuracy = caret::confusionMatrix(as.factor(preds.ensemble), validation$cancer_type)$overall["Accuracy"]))
+
+```
+
+Lastly, the results of the final model and the sub-methods are shown in the following table:
+
+```{r Final model results, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+results %>% knitr::kable()
+```
+
+**Comparison with the actual data:**
+
+```{r Actual compare, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+data.frame(PatientID = actual_validation$patient,
+           Predicted = preds.ensemble,
+           Actual = actual_validation$cancer)
+```
+
+It is obvious, that there are some minor number of ALL cases predicted as AML and vice versa.
+
+\pagebreak
+
+# Conclusion
+
+The "Method-Accuracy" result table shows the calculated accuracies of the final ensemble model and its sub-methods. The results are not really satisfiable due to the small sample size of patients used in the training process of the final model (only 31 patients).
+
+The analysis has plenty of room for further improvement:
+
+* More machine learning algorithms can be used to achieve a higher-accuracy final model.
+* In case of new leukemia patients to be added into the dataset, the code should be re-trained using all 72 already existed patient entries to better predict new entries in the dataset.
+* Visualization can be also further improved.
+
+# Appendix - Enviroment
+
+```{r appendix, echo = TRUE}
+print("Operating System:")
+version
+```
